@@ -1,0 +1,146 @@
+---
+title: "Fitness Prediction Model"
+author: "Alex Vollmer"
+output: html_document
+---
+
+```{r}
+suppressMessages({
+    library(caret)
+    library(randomForest)
+    library(xtable)
+})
+```
+
+# Overview
+In this paper we will attempt to derive a predictive model using
+machine-learning techniques. The data in question comes from 
+[Human Activity Recognition weight-lifting exercise data-set]
+(http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises). In this analysis
+we will work with two data sets: a set for training the model and a set
+for testing.
+
+# Pre-Processing
+
+## Acquiring and Cleaning Data
+
+Prior to any analyis, the  The [Weight Lifting Exercises Data](http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises)
+must be retrieved and cleaned-up. The function below retrieves data from
+the given URL and applies a number of fixes to the data:
+
+```{r}
+read_data_set <- function(url) {
+    # download and read the data
+    df <- read.csv(url, 
+                   header = TRUE, 
+                   stringsAsFactors = FALSE, 
+                   na.strings = c("NA", "", "#DIV/0!"),
+                   row.names = 1)
+    
+    # clean-up timestamps
+    df$raw_timestamp_part_1 <- NULL
+    df$raw_timestamp_part_2 <- NULL
+    df$cvtd_timestamp <-
+        strptime(as.character(df$cvtd_timestamp), 
+                 format="%m/%d/%Y %H:%M")
+
+    # fix numeric data
+    numeric_cols <- seq(4, 156)
+    for (i in numeric_cols) { 
+        df[, i] <- as.numeric(df[, i])
+    }
+    
+    return(df)
+}
+```
+
+This clean-up work in this function removes two redundant timestamp columns,
+converts the human-readable timestamp to `POSIXlt` instances, and converts all
+remaining columns (except for the last one) to numeric values. This function is
+then applied to the URLs used to download the training and testing data-sets.
+
+```{r cache=TRUE}
+training <- 
+    read_data_set("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+
+testing <-
+    read_data_set("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+Despite the relatively large number of variables, both data-sets are somewhat 
+sparse as many variables are composed of empty or NA values. Our first task will
+be to determine which columns contain missing values and remove them from our
+data-sets.  While we could attempt to impute values, such large gaps in the data
+decrease our confidence in those values and would like increase the inaccuracy
+of any model built from them.
+
+```{r}
+non_na_cols <- sapply(colnames(training), function(c) {
+    !any(is.na(training[, c]))
+})
+training_subset <- training[, non_na_cols]
+```
+
+# Fitting a Model
+
+The next step is to attempt to fit a model to the training data. Here the 
+"random forests" model has been chosen given its historically accurate results. 
+Since random forests sometimes run run the risk of over-fitting the training 
+data, we also include cross-validation to improve the model's overall predictive
+capability.
+
+```{r cache=TRUE}
+set.seed(5150)
+rfMod <- train(classe ~ ., 
+               method = "rf", 
+               data=training_subset, 
+               importance = TRUE, 
+               trControl = trainControl(method="cv", number=5))
+
+```
+
+After the model is created, we can compare how well it predicted the `classe`
+outcome vs. the actual results in the `training_subset` data by printing a
+summary of the model:
+
+```{r}
+print(rfMod$finalModel)
+```
+
+This outputs a confusion-matrix which indicates that the model's predictive
+capabilities against the training set is relatively accurate.
+As we can see, the model performed extremely well against the training
+data set, with an out-of-bag error rate of 0.13%.
+
+We can get a sense of how the model is constructed, by examining which
+variables in the training set have the most predictive power. The figure
+below illustrates two different ways of indicating the predictive power
+of each variable in the training data-set.
+
+```{r fig.height=9, fig.width=8}
+varImpPlot(rfMod$finalModel, type=1, main = "Variable Importance")
+```
+
+This chart provides a visualized ranking of the relative importance of variables
+in the fitted model from the training set by measuring how much the accuracy of
+predictions would decrease if the given variable is permuted randomly. For example,
+from this chart we can see that `roll_belt`, `num_window`, `pitch_forearm` and
+`yaw_belt` are have the largest impact on the predictive accuracy of the model.
+
+# Predicting the Testing Values
+
+The final step is to predict the outcome from the testing data using the same
+random-forests model created earlier. The predicted results are:
+
+```{r results="asis"}
+testPred <- predict(rfMod, testing)
+print(xtable(data.frame(question=seq(1, 20), prediction=testPred)), 
+      type="html",
+      include.rownames = FALSE)
+```
+
+<style>
+  th, td {
+    padding: 4px;
+  }
+</style>
