@@ -83,11 +83,12 @@ training_subset <- training[, non_na_cols]
 
 # Fitting a Model
 
-The next step is to attempt to fit a model to the training data. Here the 
+The next step is to attempt to fit a model to the training data. Since the type
+of prediction we are trying to perform is _classification_, we can choose from
+between such popular techniques as trees, random forests and bagging. Here the 
 "random forests" model has been chosen given its historically accurate results. 
 Since random forests sometimes run run the risk of over-fitting the training 
-data, we also include cross-validation to improve the model's overall predictive
-capability.
+data, we also include five-fold cross-validation to improve the model's overall predictive capability.
 
 ```{r cache=TRUE}
 set.seed(5150)
@@ -110,7 +111,13 @@ print(rfMod$finalModel)
 This outputs a confusion-matrix which indicates that the model's predictive
 capabilities against the training set is relatively accurate.
 As we can see, the model performed extremely well against the training
-data set, with an out-of-bag error rate of 0.13%.
+data set, with an out-of-bag error rate of 0.13%. 
+
+```{r}
+print(rfMod)
+```
+
+We also expect the model to be > 99% accurate.
 
 We can get a sense of how the model is constructed, by examining which
 variables in the training set have the most predictive power. The figure
